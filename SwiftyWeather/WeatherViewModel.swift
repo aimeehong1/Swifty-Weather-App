@@ -52,14 +52,14 @@ class WeatherViewModel {
             }
             print("😎 JSON returned! \(returned)")
             Task { @MainActor in
-                self.temperature = returned.current.temperature_2m
-                self.feelsLike = returned.current.apparent_temperature
-                self.weatherCode = returned.current.weather_code
-                self.windspeed = returned.current.wind_speed_10m
-                self.date = returned.daily.time
-                self.dailyWeatherCode = returned.daily.weather_code
-                self.dailyHighTemp = returned.daily.temperature_2m_max
-                self.dailyLowTemp = returned.daily.temperature_2m_min
+                temperature = returned.current.temperature_2m
+                feelsLike = returned.current.apparent_temperature
+                weatherCode = returned.current.weather_code
+                windspeed = returned.current.wind_speed_10m
+                date = returned.daily.time
+                dailyWeatherCode = returned.daily.weather_code
+                dailyHighTemp = returned.daily.temperature_2m_max
+                dailyLowTemp = returned.daily.temperature_2m_min
             }
         } catch {
             print("😡 ERROR: Could not get data from \(urlString)")

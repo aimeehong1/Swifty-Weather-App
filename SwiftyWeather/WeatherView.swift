@@ -6,82 +6,119 @@
 //
 
 import SwiftUI
+import SwiftData
 
 struct WeatherView: View {
+    @Query var preferences: [Preference]
+    @Environment(\.modelContext) private var modelContext
     @State private var weatherVM = WeatherViewModel()
+    @State private var preference = Preference()
     @State private var sheetIsPresented = false
+    var degreeLabel: String {
+        if preference.degreeUnitShowing {
+            return preference.selectedUnit == .imperial ? "F" : "C"
+        }
+        return ""
+    }
+    var windLabel: String {
+        if preference.degreeUnitShowing {
+            return preference.selectedUnit == .imperial ? "mph" : "kmh"
+        }
+        return ""
+    }
     var body: some View {
-        VStack(spacing: 0) {
-            Image(systemName: "\(getWeatherIcon(for: weatherVM.weatherCode))")
-                .resizable()
-                .scaledToFit()
-                .padding(.horizontal)
-                .symbolRenderingMode(.multicolor)
-            
-            Text("\(getWeatherDescription(for: weatherVM.weatherCode))")
-                .font(.title)
-            
-            Text("\(Int(weatherVM.temperature))°F")
-                .font(.system(size: 150))
-                .fontWeight(.thin)
-            
-            Text("Wind \(Int(weatherVM.windspeed))mph - Feels Like \(Int(weatherVM.feelsLike))°F")
-                .font(.title2)
-                .padding(.bottom)
-            
-            List(0..<weatherVM.dailyWeatherCode.count, id: \.self) { index in
-                HStack(alignment: .top) {
-                    Image(systemName: getWeatherIcon(for: weatherVM.dailyWeatherCode[index]))
-                    
-                    Text(getWeekDay(value: index + 1))
-                    
-                    Spacer()
-                    
-                    Text("\(Int(weatherVM.dailyLowTemp[index]))°F/")
-                    
-                    Text("\(weatherVM.dailyHighTemp[index])")
-                        .font(.title)
-                        .bold()
-                }
-                .font(.title2)
-            }
-            .listStyle(.plain)
-            .foregroundStyle(.white)
-            .listRowBackground(Color.clear)
-        }
-        .foregroundStyle(.white)
-        
-        .toolbar {
-            ToolbarItem(placement: .topBarTrailing) {
-                Button {
-                    sheetIsPresented.toggle()
-                } label: {
-                    Image(systemName: "gear")
-                        .tint(.white)
-                }
+        NavigationStack {
+            ZStack {
+                Color(.cyan.opacity(0.75))
+                    .ignoresSafeArea()
                 
+                VStack(spacing: 0) {
+                    Image(systemName: "\(getWeatherIcon(for: weatherVM.weatherCode))")
+                        .resizable()
+                        .scaledToFit()
+                        .padding(.horizontal)
+                        .symbolRenderingMode(.multicolor)
+                    
+                    Text("\(getWeatherDescription(for: weatherVM.weatherCode))")
+                        .font(.title)
+                    
+                    Text("\(Int(weatherVM.temperature))°\(degreeLabel)")
+                        .font(.system(size: 150))
+                        .fontWeight(.thin)
+                    
+                    Text("Wind \(Int(weatherVM.windspeed))\(windLabel) - Feels Like \(Int(weatherVM.feelsLike))°\(degreeLabel)")
+                        .font(.title2)
+                        .padding(.bottom)
+                    
+                    List(0..<weatherVM.dailyWeatherCode.count, id: \.self) { index in
+                        HStack(alignment: .top) {
+                            Image(systemName: getWeatherIcon(for: weatherVM.dailyWeatherCode[index]))
+                            
+                            Text(getWeekDay(value: index + 1))
+                            
+                            Spacer()
+                            
+                            Text("\(Int(weatherVM.dailyLowTemp[index]))°\(degreeLabel)/")
+                            
+                            Text("\(Int(weatherVM.dailyHighTemp[index]))°\(degreeLabel)")
+                                .font(.title)
+                                .bold()
+                        }
+                        .font(.title2)
+                        .foregroundStyle(.white)
+                        .listRowBackground(Color.clear)
+                    }
+                    .listStyle(.plain)
+                }
+                .foregroundStyle(.white)
+                .toolbar {
+                    ToolbarItem(placement: .topBarTrailing) {
+                        Button {
+                            sheetIsPresented.toggle()
+                        } label: {
+                            Image(systemName: "gear")
+                        }
+                        .tint(.white)
+                    }
+                }
+                .onChange(of: preferences) {
+                    Task { @MainActor in
+                        await callWeatherAPI()
+                    }
+                }
+                .task {
+                    await callWeatherAPI()
+                }
+                .fullScreenCover(isPresented: $sheetIsPresented) {
+                    PreferenceView()
+                }
             }
-        }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(.cyan.opacity(0.75))
-        .task {
-            await weatherVM.getData()
-        }
-        .fullScreenCover(isPresented: $sheetIsPresented) {
-            PreferenceView()
         }
     }
 }
 
 #Preview {
-    WeatherView()
+    NavigationStack {
+        WeatherView()
+    }
 }
 
 extension WeatherView {
+    func callWeatherAPI() async {
+        if !preferences.isEmpty {
+            preference = preferences.first!
+            weatherVM.urlString = "https://api.open-meteo.com/v1/forecast?latitude=\(preference.latString)&longitude=\(preference.longString)&current=temperature_2m,relative_humidity_2m,apparent_temperature,precipitation,weather_code,wind_speed_10m&hourly=uv_index&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_sum&temperature_unit=\(preference.selectedUnit == .imperial ? "fahrenheit" : "celsius")&wind_speed_unit=\(preference.selectedUnit == .imperial ? "mph" : "kmh")&precipitation_unit=inch&timezone=auto"
+        }
+        print(weatherVM.urlString)
+        await weatherVM.getData()
+    }
+    
     func getWeekDay(value: Int) -> String {
         let date = Calendar.current.date(byAdding: .day, value: value, to: Date.now)!
         let dayNumber = Calendar.current.component(.weekday, from: date)
-        return Calendar.current.weekdaySymbols[value - 1]
+        let weekday = Calendar.current.weekdaySymbols[value - 1]
+        print("dayNumber: \(dayNumber), weekday: \(weekday)")
+        return weekday
     }
     
     func getWeatherDescription(for code: Int) -> String {
